@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/4.1/ref/settings/
 """
 
 import os
+import structlog
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -49,6 +50,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    'django_structlog.middlewares.RequestMiddleware',
 ]
 
 ROOT_URLCONF = "mysite.urls"
@@ -153,6 +155,18 @@ LOGGING = {
             "format": CONSOLE_LOGGING_FORMAT,
             "class": "mysite.logging_helpers.HostnameAddingFormatter",
         },
+        "json_formatter": {
+            "()": structlog.stdlib.ProcessorFormatter,
+            "processor": structlog.processors.JSONRenderer(),
+        },
+        "plain_console": {
+            "()": structlog.stdlib.ProcessorFormatter,
+            "processor": structlog.dev.ConsoleRenderer(),
+        },
+        "key_value": {
+            "()": structlog.stdlib.ProcessorFormatter,
+            "processor": structlog.processors.KeyValueRenderer(key_order=['timestamp', 'level', 'event', 'logger']),
+        },
     },
     "handlers": {
         "mail_admins": {
@@ -166,14 +180,19 @@ LOGGING = {
         },
         "console": {
             "class": "logging.StreamHandler",
-            "formatter": "my_formatter",
+            "formatter": "plain_console",
+        },
+        "json_file": {
+            "class": "logging.handlers.WatchedFileHandler",
+            "filename": "logs/django-json.log",
+            "formatter": "json_formatter",
         },
         "file": {
             "class": "logging.handlers.RotatingFileHandler",
-            "filename": CONSOLE_LOGGING_FILE_LOCATION,
+            "filename": "logs/django.log",
+            "formatter": "key_value",
             "mode": "a",
             "encoding": "utf-8",
-            "formatter": "my_formatter",
             "backupCount": 5,
             "maxBytes": 10485760,
         },
@@ -182,13 +201,13 @@ LOGGING = {
         "": {
             # The root logger is always defined as an empty string and will pick up all logging that is not collected
             # by a more specific logger below
-            "handlers": ["console", "mail_admins", "file"],
+            "handlers": ["console", "mail_admins", "file", "json_file"],
             "level": os.getenv("ROOT_LOG_LEVEL", "INFO"),
         },
         "django": {
             # The 'django' logger is configured by Django out of the box. Here, it is reconfigured in order to
             # utilize the file logger and allow configuration at runtime
-            "handlers": ["console", "mail_admins", "file"],
+            "handlers": ["console", "mail_admins", "file", "json_file"],
             "level": os.getenv("DJANGO_LOG_LEVEL", "INFO"),
             "propagate": False,
         },
@@ -205,3 +224,20 @@ LOGGING = {
         },
     },
 }
+
+structlog.configure(
+    processors=[
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.filter_by_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.UnicodeDecoder(),
+        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+    ],
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    cache_logger_on_first_use=True,
+)
