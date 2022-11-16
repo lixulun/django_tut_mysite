@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/4.1/ref/settings/
 import os
 import structlog
 from pathlib import Path
+from .structlog_processors import TimeWithTimezone
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -130,12 +131,6 @@ STATICFILES_DIRS = [
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
-# %(threadName)-14s (%(pathname)s:%(lineno)d)
-CONSOLE_LOGGING_FORMAT = (
-    "%(hostname)s %(asctime)s %(levelname)-8s %(name)s.%(funcName)s: %(message)s"
-)
-CONSOLE_LOGGING_FILE_LOCATION = "django.log"
-
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -146,26 +141,29 @@ LOGGING = {
         "require_debug_true": {
             "()": "django.utils.log.RequireDebugTrue",
         },
-        "ignore_something": {
-            "()": "mysite.logging_helpers.SomethingFilter",
-        },
     },
     "formatters": {
-        "my_formatter": {
-            "format": CONSOLE_LOGGING_FORMAT,
-            "class": "mysite.logging_helpers.HostnameAddingFormatter",
-        },
-        "json_formatter": {
-            "()": structlog.stdlib.ProcessorFormatter,
-            "processor": structlog.processors.JSONRenderer(),
-        },
         "plain_console": {
             "()": structlog.stdlib.ProcessorFormatter,
             "processor": structlog.dev.ConsoleRenderer(),
+            "foreign_pre_chain": [
+                structlog.contextvars.merge_contextvars,
+                TimeWithTimezone(),
+                structlog.stdlib.add_logger_name,
+                structlog.stdlib.add_log_level,
+                structlog.stdlib.PositionalArgumentsFormatter(),
+            ],
         },
         "key_value": {
             "()": structlog.stdlib.ProcessorFormatter,
             "processor": structlog.processors.KeyValueRenderer(key_order=['timestamp', 'level', 'event', 'logger']),
+            "foreign_pre_chain": [
+                structlog.contextvars.merge_contextvars,
+                TimeWithTimezone(),
+                structlog.stdlib.add_logger_name,
+                structlog.stdlib.add_log_level,
+                structlog.stdlib.PositionalArgumentsFormatter(),
+            ],
         },
     },
     "handlers": {
@@ -173,7 +171,6 @@ LOGGING = {
             "level": "ERROR",
             "filters": [
                 "require_debug_false",
-                "ignore_something",
             ],
             "class": "django.utils.log.AdminEmailHandler",
             "include_html": True,
@@ -181,11 +178,6 @@ LOGGING = {
         "console": {
             "class": "logging.StreamHandler",
             "formatter": "plain_console",
-        },
-        "json_file": {
-            "class": "logging.handlers.WatchedFileHandler",
-            "filename": "logs/django-json.log",
-            "formatter": "json_formatter",
         },
         "file": {
             "class": "logging.handlers.RotatingFileHandler",
@@ -201,24 +193,30 @@ LOGGING = {
         "": {
             # The root logger is always defined as an empty string and will pick up all logging that is not collected
             # by a more specific logger below
-            "handlers": ["console", "mail_admins", "file", "json_file"],
+            "handlers": ["console", "mail_admins", "file"],
             "level": os.getenv("ROOT_LOG_LEVEL", "INFO"),
         },
         "django": {
             # The 'django' logger is configured by Django out of the box. Here, it is reconfigured in order to
             # utilize the file logger and allow configuration at runtime
-            "handlers": ["console", "mail_admins", "file", "json_file"],
+            "handlers": ["console", "mail_admins", "file"],
             "level": os.getenv("DJANGO_LOG_LEVEL", "INFO"),
             "propagate": False,
         },
+        # 职责被中间件代替
         "django.server": {
-            "propagate": True,
+            "propagate": False,
+        },
+        # 职责被中间件代替
+        "django.request": {
+            "propagate": False,
         },
         "django.security.DisallowedHost": {
             "propagate": False,
             "level": "ERROR",
         },
         "django.db.backends": {
+            "propagate": False,
             "handlers": ["console"],
             "level": "DEBUG",
         },
@@ -229,7 +227,7 @@ structlog.configure(
     processors=[
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.filter_by_level,
-        structlog.processors.TimeStamper(fmt="iso"),
+        TimeWithTimezone(),
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,
         structlog.stdlib.PositionalArgumentsFormatter(),
