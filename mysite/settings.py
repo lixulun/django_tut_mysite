@@ -13,10 +13,6 @@ https://docs.djangoproject.com/en/4.1/ref/settings/
 import os
 from pathlib import Path
 
-import structlog
-
-from .structlog_processors import TimeWithTimezone
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -53,7 +49,6 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "django_structlog.middlewares.RequestMiddleware",
 ]
 
 ROOT_URLCONF = "mysite.urls"
@@ -129,115 +124,3 @@ STATICFILES_DIRS = [BASE_DIR / "statics"]
 # https://docs.djangoproject.com/en/4.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
-
-LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "filters": {
-        "require_debug_false": {
-            "()": "django.utils.log.RequireDebugFalse",
-        },
-        "require_debug_true": {
-            "()": "django.utils.log.RequireDebugTrue",
-        },
-    },
-    "formatters": {
-        "plain_console": {
-            "()": structlog.stdlib.ProcessorFormatter,
-            "processor": structlog.dev.ConsoleRenderer(),
-            "foreign_pre_chain": [
-                structlog.contextvars.merge_contextvars,
-                TimeWithTimezone(),
-                structlog.stdlib.add_logger_name,
-                structlog.stdlib.add_log_level,
-                structlog.stdlib.PositionalArgumentsFormatter(),
-            ],
-        },
-        "key_value": {
-            "()": structlog.stdlib.ProcessorFormatter,
-            "processor": structlog.processors.KeyValueRenderer(
-                key_order=["timestamp", "level", "event", "logger"]
-            ),
-            "foreign_pre_chain": [
-                structlog.contextvars.merge_contextvars,
-                TimeWithTimezone(),
-                structlog.stdlib.add_logger_name,
-                structlog.stdlib.add_log_level,
-                structlog.stdlib.PositionalArgumentsFormatter(),
-            ],
-        },
-    },
-    "handlers": {
-        "mail_admins": {
-            "level": "ERROR",
-            "filters": [
-                "require_debug_false",
-            ],
-            "class": "django.utils.log.AdminEmailHandler",
-            "include_html": True,
-        },
-        "console": {
-            "class": "logging.StreamHandler",
-            "formatter": "plain_console",
-        },
-        "file": {
-            "class": "logging.handlers.RotatingFileHandler",
-            "filename": "logs/django.log",
-            "formatter": "key_value",
-            "mode": "a",
-            "encoding": "utf-8",
-            "backupCount": 5,
-            "maxBytes": 10485760,
-        },
-    },
-    "loggers": {
-        "": {
-            # The root logger is always defined as an empty string and will pick up all logging that is not collected
-            # by a more specific logger below
-            "handlers": ["console", "mail_admins", "file"],
-            "level": os.getenv("ROOT_LOG_LEVEL", "INFO"),
-        },
-        "django": {
-            # The 'django' logger is configured by Django out of the box. Here, it is reconfigured in order to
-            # utilize the file logger and allow configuration at runtime
-            "handlers": ["console", "mail_admins", "file"],
-            "level": os.getenv("DJANGO_LOG_LEVEL", "INFO"),
-            "propagate": False,
-        },
-        # 职责被中间件代替
-        "django.server": {
-            "propagate": False,
-        },
-        # 职责被中间件代替
-        "django.request": {
-            "propagate": False,
-        },
-        "django.security.DisallowedHost": {
-            "propagate": False,
-            "level": "ERROR",
-        },
-        "django.db.backends": {
-            "propagate": False,
-            "handlers": ["console"],
-            "level": "DEBUG",
-        },
-    },
-}
-
-structlog.configure(
-    processors=[
-        structlog.contextvars.merge_contextvars,
-        structlog.stdlib.filter_by_level,
-        TimeWithTimezone(),
-        structlog.stdlib.add_logger_name,
-        structlog.stdlib.add_log_level,
-        structlog.stdlib.PositionalArgumentsFormatter(),
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
-        structlog.processors.UnicodeDecoder(),
-        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
-    ],
-    logger_factory=structlog.stdlib.LoggerFactory(),
-    cache_logger_on_first_use=True,
-)
