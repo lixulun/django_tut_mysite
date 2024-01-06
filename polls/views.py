@@ -1,10 +1,9 @@
-from django.shortcuts import HttpResponse, HttpResponseRedirect, render, get_object_or_404
-from django.template import loader
-from django.views import generic
-from django.urls import reverse
 from django.db.models import F
+from django.shortcuts import HttpResponseRedirect, get_object_or_404, render
+from django.urls import reverse
+from django.views import generic
 
-from .models import Question, Choice
+from .models import Choice, Question
 
 
 class Index(generic.ListView):
@@ -33,7 +32,7 @@ class Results(generic.DetailView):
 def vote(request, question_id):
     question = get_object_or_404(Question, pk=question_id)
     try:
-        selected_choice = question.choice_set.get(pk=request.POST['choice'])
+        selected_choice = question.choice_set.get(pk=request.POST["choice"])
     except (KeyError, Choice.DoesNotExist):
         return render(
             request,
@@ -41,6 +40,6 @@ def vote(request, question_id):
             {"question": question, "error_message": "你没有做出选择"},
         )
     else:
-        selected_choice.votes = F('votes') + 1
+        selected_choice.votes = F("votes") + 1
         selected_choice.save()
         return HttpResponseRedirect(reverse("polls:results", args=(question_id,)))

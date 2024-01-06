@@ -11,8 +11,10 @@ https://docs.djangoproject.com/en/4.1/ref/settings/
 """
 
 import os
-import structlog
 from pathlib import Path
+
+import structlog
+
 from .structlog_processors import TimeWithTimezone
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -51,7 +53,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    'django_structlog.middlewares.RequestMiddleware',
+    "django_structlog.middlewares.RequestMiddleware",
 ]
 
 ROOT_URLCONF = "mysite.urls"
@@ -121,9 +123,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.1/howto/static-files/
 
 STATIC_URL = "static/"
-STATICFILES_DIRS = [
-    BASE_DIR / "statics"
-]
+STATICFILES_DIRS = [BASE_DIR / "statics"]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.1/ref/settings/#default-auto-field
@@ -156,7 +156,9 @@ LOGGING = {
         },
         "key_value": {
             "()": structlog.stdlib.ProcessorFormatter,
-            "processor": structlog.processors.KeyValueRenderer(key_order=['timestamp', 'level', 'event', 'logger']),
+            "processor": structlog.processors.KeyValueRenderer(
+                key_order=["timestamp", "level", "event", "logger"]
+            ),
             "foreign_pre_chain": [
                 structlog.contextvars.merge_contextvars,
                 TimeWithTimezone(),
